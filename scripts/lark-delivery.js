@@ -1,9 +1,14 @@
 import { createHash } from 'crypto';
 import { spawnSync } from 'child_process';
+import { existsSync } from 'fs';
+import { fileURLToPath } from 'url';
 
 // Feishu post messages are limited to 30 KB after serialization. Keep each
 // Markdown chunk comfortably below that limit to leave room for CLI conversion.
 const DEFAULT_MAX_CHUNK_BYTES = 18_000;
+const LOCAL_LARK_CLI = fileURLToPath(
+  new URL('./node_modules/.bin/lark-cli', import.meta.url)
+);
 
 function byteLength(value) {
   return Buffer.byteLength(value, 'utf8');
@@ -129,7 +134,9 @@ export async function sendLarkDigest(
   const target = resolveLarkTarget(delivery, env);
   const chunks = splitLarkMarkdown(text);
   const digestHash = createHash('sha256').update(text).digest('hex').slice(0, 32);
-  const cli = env.LARK_CLI_BIN || 'lark-cli';
+  const cli =
+    env.LARK_CLI_BIN ||
+    (existsSync(LOCAL_LARK_CLI) ? LOCAL_LARK_CLI : 'lark-cli');
 
   for (let index = 0; index < chunks.length; index += 1) {
     const prefix = chunks.length > 1 ? `**Follow Builders 日报 (${index + 1}/${chunks.length})**\n\n` : '';

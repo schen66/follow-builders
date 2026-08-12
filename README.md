@@ -34,18 +34,18 @@ The agent will ask you:
 No API keys needed — all content is fetched centrally.
 Your first digest arrives immediately after setup.
 
-## Scheduled Lark/Feishu Delivery with GitHub Actions
+## Scheduled Lark/Feishu Delivery with Codex
 
-The optional `Deliver Chinese Digest to Lark` workflow sends the complete Chinese
-digest every day at **08:00 Asia/Shanghai**, declared directly with GitHub Actions'
-IANA timezone support. It is an additional delivery path: the existing central
-feeds and ChatGPT/agent workflow continue unchanged.
+A local Codex scheduled task can send the complete Chinese digest every day at
+**08:00 Asia/Shanghai**. Codex performs the remix with the user's ChatGPT/Codex
+plan, then the official `lark-cli` sends the result. No OpenAI API key or GitHub
+Actions delivery workflow is used. The existing central feeds and other ChatGPT/
+agent consumers remain unchanged.
 
-The workflow reuses `prepare-digest.js` and the repository prompt files, generates
-the complete Chinese digest through the OpenAI Responses API, and sends it through
-the official `lark-cli`. `lark-cli` is the delivery client; an OpenAI API key is
-required because a GitHub Actions runner does not have an interactive AI agent to
-perform the remix step.
+This is a local automation: keep the computer awake and the ChatGPT/Codex desktop
+app running at delivery time. The task fetches the latest public central feed,
+stores delivery state only on this computer, and never commits credentials or
+recipient IDs.
 
 ### 1. Create and configure a Lark/Feishu app
 
@@ -68,35 +68,41 @@ Set exactly one of these targets:
   the `im.message.receive_v1` event in the developer console. Open IDs are scoped
   to an app, so use the value emitted for this same app.
 
-### 3. Configure GitHub Secrets
+### 3. Store delivery credentials locally
 
-In **Repository Settings → Secrets and variables → Actions**, add:
+Create `~/.follow-builders/.env` with these values (never commit this file):
 
-| Secret | Required | Purpose |
-| --- | --- | --- |
-| `OPENAI_API_KEY` | Yes | Generates the full Chinese digest from the existing feeds and prompts |
-| `LARK_APP_ID` | Yes | Lark/Feishu app ID (`cli_xxx`) |
-| `LARK_APP_SECRET` | Yes | Lark/Feishu app secret |
-| `LARK_CHAT_ID` | One target | Group chat ID (`oc_xxx`) |
-| `LARK_OPEN_ID` | One target | User open ID (`ou_xxx`) for a direct message |
+```dotenv
+LARK_APP_ID=cli_xxx
+LARK_APP_SECRET=your_app_secret
+# Set exactly one recipient:
+LARK_CHAT_ID=oc_xxx
+# LARK_OPEN_ID=ou_xxx
+LARK_BRAND=feishu
+```
 
-Do not set both target Secrets. No credential or recipient ID is stored in the
-repository. You can optionally set these repository **Variables**:
+Use `LARK_BRAND=lark` for Lark international. No `OPENAI_API_KEY` is needed.
 
-- `FOLLOW_BUILDERS_OPENAI_MODEL` — defaults to `gpt-5-mini`
-- `LARK_BRAND` — defaults to `feishu`; use `lark` for Lark international
+### 4. Install and schedule
 
-### 4. Validate before enabling live delivery
+Install the pinned official CLI and test the deterministic helpers:
 
-Open **Actions → Deliver Chinese Digest to Lark → Run workflow**, enable
-`dry_run`, and run it. This generates the digest and lets the installed official
-CLI validate the complete request without sending a message or advancing delivery
-state. Then run it once with `dry_run` disabled and confirm receipt.
+```bash
+cd scripts
+npm ci
+npm test
+```
 
-`state-lark.json` is separate from `state-feed.json`. New central-feed entries are
-queued there, and the queue is cleared only after a successful Lark send. This
-prevents repeats during normal operation and retains unsent entries across failed
-runs. If the queue is empty, the workflow sends `今天暂无新的 Builder 更新`.
+Create a Codex scheduled task in this repository for 08:00 Asia/Shanghai. Each
+run executes `prepare-local-lark-run.js`, reads
+`prompts/codex-lark-digest.md` and the generated `lark-input.json`, writes the
+finished digest, and executes `finalize-local-lark-run.js`.
+
+`.follow-builders-local/state-lark.json` is ignored by Git and separate from the
+central feed state. New entries are queued before generation and removed only
+after a successful send, preventing repeats while retaining failed deliveries.
+The finalizer rejects any digest that drops an original URL. If the queue is
+empty, Codex sends exactly `今天暂无新的 Builder 更新`.
 
 ## Changing Settings
 
@@ -185,7 +191,7 @@ See [examples/sample-digest.md](examples/sample-digest.md) for what the output l
 ## Privacy
 
 - No API keys are sent anywhere — all content is fetched centrally
-- If you use Telegram/email delivery, those keys are stored locally in `~/.follow-builders/.env`
+- If you use Telegram/email/Lark delivery, those keys are stored locally in `~/.follow-builders/.env`
 - The skill only reads public content (public blog posts, public YouTube videos, public X posts)
 - Your configuration, preferences, and reading history stay on your machine
 

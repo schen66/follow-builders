@@ -30,17 +30,15 @@ Agent 会询问你：
 不需要任何 API key——所有内容由中心化服务统一抓取。
 设置完成后，你的第一期摘要会立即推送。
 
-## 使用 GitHub Actions 定时推送到飞书/Lark
+## 使用 Codex 定时推送到飞书/Lark
 
-可选的 `Deliver Chinese Digest to Lark` workflow 会在每天
-**Asia/Shanghai 08:00** 自动发送完整中文日报。GitHub Actions 的 cron 使用
-IANA 时区，因此 workflow 中直接声明了 `Asia/Shanghai`。这是独立增加的投递
-旁路，现有中央 feed 和 ChatGPT/Agent 流程保持不变。
+本地 Codex Scheduled task 会在每天 **Asia/Shanghai 08:00** 生成并发送完整
+中文日报。Codex 使用用户的 ChatGPT/Codex 订阅额度完成内容整理，再由官方
+`lark-cli` 投递；不使用 OpenAI API key，也不使用 GitHub Actions 执行日报。
+现有中央 feed 和其他 ChatGPT/Agent 消费流程保持不变。
 
-workflow 会复用 `prepare-digest.js` 和仓库现有 prompts，通过 OpenAI Responses
-API 生成完整中文日报，再交给官方 `lark-cli` 发送。`lark-cli` 只负责投递；由于
-GitHub Actions runner 中没有交互式 AI Agent，自动生成日报还需要一个 OpenAI
-API key。
+这是本地自动任务：发送时间需要电脑保持唤醒，ChatGPT/Codex 桌面应用保持运行。
+任务读取最新公共中央 feed，投递状态只保存在本机，不会提交凭据或接收目标。
 
 ### 1. 创建并配置飞书/Lark 应用
 
@@ -63,33 +61,39 @@ API key。
   `event.sender.sender_id.open_id` 复制。`open_id` 与应用绑定，必须使用这个应用
   收到的值。
 
-### 3. 配置 GitHub Secrets
+### 3. 在本机保存投递凭据
 
-进入 **Repository Settings → Secrets and variables → Actions**，添加：
+创建 `~/.follow-builders/.env`，写入以下内容（绝不要提交该文件）：
 
-| Secret | 是否必需 | 用途 |
-| --- | --- | --- |
-| `OPENAI_API_KEY` | 是 | 基于现有 feed 和 prompts 生成完整中文日报 |
-| `LARK_APP_ID` | 是 | 飞书/Lark 应用 ID（`cli_xxx`） |
-| `LARK_APP_SECRET` | 是 | 飞书/Lark 应用密钥 |
-| `LARK_CHAT_ID` | 接收目标二选一 | 群聊 `chat_id`（`oc_xxx`） |
-| `LARK_OPEN_ID` | 接收目标二选一 | 私聊用户 `open_id`（`ou_xxx`） |
+```dotenv
+LARK_APP_ID=cli_xxx
+LARK_APP_SECRET=your_app_secret
+# 接收目标二选一：
+LARK_CHAT_ID=oc_xxx
+# LARK_OPEN_ID=ou_xxx
+LARK_BRAND=feishu
+```
 
-不要同时设置两个接收目标。仓库不会保存任何凭据或接收 ID。还可以配置以下
-GitHub Actions **Variables**：
+国际版 Lark 使用 `LARK_BRAND=lark`。不需要 `OPENAI_API_KEY`。
 
-- `FOLLOW_BUILDERS_OPENAI_MODEL`：默认 `gpt-5-mini`
-- `LARK_BRAND`：默认 `feishu`；使用 Lark 国际版时设为 `lark`
+### 4. 安装并创建定时任务
 
-### 4. 先做无副作用验证
+安装锁定版本的官方 CLI，并验证确定性脚本：
 
-打开 **Actions → Deliver Chinese Digest to Lark → Run workflow**，勾选
-`dry_run` 后运行。它会生成日报，并让官方 CLI 校验完整请求，但不会实际发消息，
-也不会推进投递状态。验证通过后，再关闭 `dry_run` 手动运行一次并确认收到消息。
+```bash
+cd scripts
+npm ci
+npm test
+```
 
-`state-lark.json` 与中央 feed 的 `state-feed.json` 相互独立。中央 feed 的新条目会
-进入 Lark 待发送队列，只有成功发送后才会清空，因此正常情况下不会重复，失败时
-也不会漏掉未发送内容。队列为空时发送“今天暂无新的 Builder 更新”。
+在本仓库创建每天 Asia/Shanghai 08:00 的 Codex Scheduled task。每次运行先执行
+`prepare-local-lark-run.js`，读取 `prompts/codex-lark-digest.md` 和生成的
+`lark-input.json`，写入完整日报，再执行 `finalize-local-lark-run.js`。
+
+`.follow-builders-local/state-lark.json` 已被 Git 忽略，并与中央 feed 状态分离。
+新条目在生成前进入队列，只有发送成功才会清除，因此不会正常重复，也不会因失败
+漏发。finalizer 会拒绝遗漏任一原始链接的日报。队列为空时，Codex 发送完全一致的
+“今天暂无新的 Builder 更新”。
 
 ## 修改设置
 
@@ -173,7 +177,7 @@ cd ~/.claude/skills/follow-builders/scripts && npm install
 ## 隐私
 
 - 不发送任何 API key——所有内容由中心化服务获取
-- 如果你使用 Telegram/邮件推送，相关 key 仅存储在本地 `~/.follow-builders/.env`
+- 如果你使用 Telegram/邮件/飞书推送，相关 key 仅存储在本地 `~/.follow-builders/.env`
 - Skill 只读取公开内容（公开的博客文章、YouTube 视频和 X 帖子）
 - 你的配置、偏好和阅读记录都保留在你自己的设备上
 

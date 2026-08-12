@@ -40,6 +40,7 @@ const PROMPT_FILES = [
   'digest-intro.md',
   'translate.md'
 ];
+let bundlePromise = null;
 
 // -- Fetch helpers -----------------------------------------------------------
 
@@ -59,7 +60,23 @@ async function loadFeed(filename, url) {
   if (process.env.FOLLOW_BUILDERS_FEED_SOURCE === 'local') {
     return JSON.parse(await readFile(join(REPO_DIR, filename), 'utf8'));
   }
+  if (process.env.FOLLOW_BUILDERS_FEED_SOURCE === 'bundle') {
+    return JSON.parse(await loadFromBundle(filename));
+  }
   return fetchJSON(url);
+}
+
+async function loadFromBundle(path) {
+  const bundlePath = process.env.FOLLOW_BUILDERS_BUNDLE_PATH;
+  if (!bundlePath) {
+    throw new Error('FOLLOW_BUILDERS_BUNDLE_PATH is required for bundle source');
+  }
+  bundlePromise ||= readFile(bundlePath, 'utf8').then(JSON.parse);
+  const bundle = await bundlePromise;
+  if (typeof bundle.files?.[path] !== 'string') {
+    throw new Error(`Central feed bundle does not contain ${path}`);
+  }
+  return bundle.files[path];
 }
 
 // -- Main --------------------------------------------------------------------
@@ -130,7 +147,14 @@ async function main() {
 
     // Priority 2: latest from GitHub (central updates). Repository workflows
     // can pin prompts to the checked-out commit for a reproducible run.
-    if (process.env.FOLLOW_BUILDERS_PROMPT_SOURCE !== 'local') {
+    if (process.env.FOLLOW_BUILDERS_PROMPT_SOURCE === 'bundle') {
+      try {
+        prompts[key] = await loadFromBundle(`prompts/${filename}`);
+        continue;
+      } catch (err) {
+        errors.push(`Could not load ${filename} from central bundle: ${err.message}`);
+      }
+    } else if (process.env.FOLLOW_BUILDERS_PROMPT_SOURCE !== 'local') {
       const remote = await fetchText(`${PROMPTS_BASE}/${filename}`);
       if (remote) {
         prompts[key] = remote;
