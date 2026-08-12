@@ -123,6 +123,13 @@ run executes `prepare-local-lark-run.js`, reads
 `prompts/codex-lark-digest.md` and the generated `lark-input.json`, writes the
 finished digest, and executes `finalize-local-lark-run.js`.
 
+If the local command sandbox cannot reach GitHub directly, let the scheduled
+Codex task use the connected GitHub app's read-only `fetch_file` operation to
+refresh `.follow-builders-local/central-feed-bundle.json`, then rerun the
+preparation step with `--use-cache`. This fallback only reads the eight public
+feed/prompt files from `zarazhangrui/follow-builders@main` and never writes to
+that repository.
+
 `.follow-builders-local/state-lark.json` is ignored by Git and separate from the
 central feed state. New entries are queued before generation and removed only
 after a successful send, preventing repeats while retaining failed deliveries.

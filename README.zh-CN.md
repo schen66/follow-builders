@@ -112,6 +112,11 @@ npm test
 `prepare-local-lark-run.js`，读取 `prompts/codex-lark-digest.md` 和生成的
 `lark-input.json`，写入完整日报，再执行 `finalize-local-lark-run.js`。
 
+如果本地命令沙箱无法直接连接 GitHub，让 Codex 定时任务使用已连接 GitHub 应用的
+只读 `fetch_file` 操作刷新 `.follow-builders-local/central-feed-bundle.json`，再用
+`--use-cache` 重跑准备步骤。此回退只读取
+`zarazhangrui/follow-builders@main` 的 8 个公开 feed/prompt 文件，绝不向该仓库写入。
+
 `.follow-builders-local/state-lark.json` 已被 Git 忽略，并与中央 feed 状态分离。
 新条目在生成前进入队列，只有发送成功才会清除，因此不会正常重复，也不会因失败
 漏发。finalizer 会拒绝遗漏任一原始链接的日报。队列为空时，Codex 发送完全一致的
