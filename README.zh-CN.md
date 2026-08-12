@@ -30,6 +30,67 @@ Agent 会询问你：
 不需要任何 API key——所有内容由中心化服务统一抓取。
 设置完成后，你的第一期摘要会立即推送。
 
+## 使用 GitHub Actions 定时推送到飞书/Lark
+
+可选的 `Deliver Chinese Digest to Lark` workflow 会在每天
+**Asia/Shanghai 08:00** 自动发送完整中文日报。GitHub Actions 的 cron 使用
+IANA 时区，因此 workflow 中直接声明了 `Asia/Shanghai`。这是独立增加的投递
+旁路，现有中央 feed 和 ChatGPT/Agent 流程保持不变。
+
+workflow 会复用 `prepare-digest.js` 和仓库现有 prompts，通过 OpenAI Responses
+API 生成完整中文日报，再交给官方 `lark-cli` 发送。`lark-cli` 只负责投递；由于
+GitHub Actions runner 中没有交互式 AI Agent，自动生成日报还需要一个 OpenAI
+API key。
+
+### 1. 创建并配置飞书/Lark 应用
+
+1. 在飞书/Lark 开放平台创建企业自建应用，并启用机器人能力。
+2. 为机器人开通 `im:message:send_as_bot` 权限，发布应用版本，并确保目标用户在
+   应用可用范围内。
+3. 如果发到群聊，把机器人加入目标群并确认机器人可以发言。
+4. 在应用凭证页面复制 App ID（`cli_xxx`）和 App Secret。
+
+### 2. 获取接收目标 ID
+
+以下目标二选一：
+
+- **群聊：** 使用以 `oc_` 开头的 `chat_id`。机器人加入群后，可运行
+  `lark-cli im +chat-search --query "<群名>" --as bot --format json`；也可以在群内
+  发送一条会触发 `im.message.receive_v1` 的消息，然后从事件里的
+  `event.message.chat_id` 复制。
+- **私聊：** 使用以 `ou_` 开头、属于当前应用的用户 `open_id`。让用户先给机器人
+  发一条消息，再从开放平台 `im.message.receive_v1` 事件中的
+  `event.sender.sender_id.open_id` 复制。`open_id` 与应用绑定，必须使用这个应用
+  收到的值。
+
+### 3. 配置 GitHub Secrets
+
+进入 **Repository Settings → Secrets and variables → Actions**，添加：
+
+| Secret | 是否必需 | 用途 |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | 是 | 基于现有 feed 和 prompts 生成完整中文日报 |
+| `LARK_APP_ID` | 是 | 飞书/Lark 应用 ID（`cli_xxx`） |
+| `LARK_APP_SECRET` | 是 | 飞书/Lark 应用密钥 |
+| `LARK_CHAT_ID` | 接收目标二选一 | 群聊 `chat_id`（`oc_xxx`） |
+| `LARK_OPEN_ID` | 接收目标二选一 | 私聊用户 `open_id`（`ou_xxx`） |
+
+不要同时设置两个接收目标。仓库不会保存任何凭据或接收 ID。还可以配置以下
+GitHub Actions **Variables**：
+
+- `FOLLOW_BUILDERS_OPENAI_MODEL`：默认 `gpt-5-mini`
+- `LARK_BRAND`：默认 `feishu`；使用 Lark 国际版时设为 `lark`
+
+### 4. 先做无副作用验证
+
+打开 **Actions → Deliver Chinese Digest to Lark → Run workflow**，勾选
+`dry_run` 后运行。它会生成日报，并让官方 CLI 校验完整请求，但不会实际发消息，
+也不会推进投递状态。验证通过后，再关闭 `dry_run` 手动运行一次并确认收到消息。
+
+`state-lark.json` 与中央 feed 的 `state-feed.json` 相互独立。中央 feed 的新条目会
+进入 Lark 待发送队列，只有成功发送后才会清空，因此正常情况下不会重复，失败时
+也不会漏掉未发送内容。队列为空时发送“今天暂无新的 Builder 更新”。
+
 ## 修改设置
 
 通过对话即可修改推送偏好。直接告诉你的 agent：

@@ -42,17 +42,21 @@
       "properties": {
         "method": {
           "type": "string",
-          "enum": ["stdout", "telegram", "email"],
+          "enum": ["stdout", "telegram", "email", "lark"],
           "default": "stdout",
-          "description": "Delivery method: stdout (terminal/agent), telegram (bot message), email (via Resend)"
+          "description": "Delivery method: stdout (terminal/agent), telegram (bot message), email (via Resend), lark (via lark-cli)"
         },
         "chatId": {
           "type": "string",
-          "description": "Telegram chat ID (only for telegram method)"
+          "description": "Telegram chat ID or Lark group chat_id (for telegram/lark method)"
         },
         "email": {
           "type": "string",
           "description": "Email address to send digest to (only for email method)"
+        },
+        "openId": {
+          "type": "string",
+          "description": "Lark user open_id for a direct message (only for lark method; use either openId or chatId)"
         }
       }
     },

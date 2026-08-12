@@ -13,7 +13,8 @@ Philosophy: follow builders with original opinions, not influencers who regurgit
 
 **No API keys or environment variables are required from users.** All content
 (X/Twitter posts and YouTube transcripts) is fetched centrally and served via
-a public feed. Users only need API keys if they choose Telegram or email delivery.
+a public feed. Users only need API keys if they choose Telegram, email, or the
+optional repository-managed Lark delivery.
 
 ## Detecting Platform
 
@@ -74,10 +75,13 @@ and move on.
 Tell the user:
 
 "Since you're not using a persistent agent, I need a way to send you the digest
-when you're not in this terminal. You have two options:
+when you're not in this terminal. You have three options:
 
 1. **Telegram** — I'll send it as a Telegram message (free, takes ~5 min to set up)
 2. **Email** — I'll email it to you (requires a free Resend account)
+3. **Lark/Feishu** — the repository's GitHub Actions workflow sends a complete
+   Chinese digest through the official lark-cli (requires a Lark app and an
+   OpenAI API key; see the repository README)
 
 Or you can skip this and just type /ai whenever you want your digest — but it
 won't arrive automatically."
@@ -109,6 +113,11 @@ Then they need a Resend API key:
 
 Add the key to the .env file.
 
+**If they choose Lark/Feishu:**
+For repository-managed delivery, follow the "Scheduled Lark/Feishu delivery"
+section in README.md or README.zh-CN.md. Keep app credentials and the recipient
+ID in GitHub Secrets. Never write them to config.json or commit them.
+
 **If they choose on-demand:**
 Set `delivery.method` to `"stdout"`. Tell them: "No problem — just type /ai
 whenever you want your digest. No automatic delivery will be set up."
@@ -125,7 +134,7 @@ Ask: "What language do you prefer for your digest?"
 **If the user chose "stdout" or "right here" delivery:** No API keys needed at all!
 All content is fetched centrally. Skip to Step 6.
 
-**If the user chose Telegram or Email delivery:**
+**If the user chose Telegram, Email, or local Lark delivery:**
 Create the .env file with only the delivery key they need:
 
 ```bash
@@ -136,6 +145,13 @@ cat > ~/.follow-builders/.env << 'ENVEOF'
 
 # Resend API key (only if using email delivery)
 # RESEND_API_KEY=paste_your_key_here
+
+# Lark/Feishu app credentials (only if using local Lark delivery)
+# LARK_APP_ID=cli_xxx
+# LARK_APP_SECRET=paste_your_app_secret_here
+# Set exactly one recipient:
+# LARK_CHAT_ID=oc_xxx
+# LARK_OPEN_ID=ou_xxx
 ENVEOF
 ```
 
@@ -325,6 +341,7 @@ The script outputs a single JSON blob with everything you need:
 - `config` — user's language and delivery preferences
 - `podcasts` — podcast episodes with full transcripts
 - `x` — builders with their recent tweets (text, URLs, bios)
+- `blogs` — official blog posts with full article content
 - `prompts` — the remix instructions to follow
 - `stats` — counts of episodes and tweets
 - `errors` — non-fatal issues (IGNORE these)
@@ -334,7 +351,8 @@ internet connection. Otherwise, use whatever content is in the JSON.
 
 ### Step 3: Check for content
 
-If `stats.podcastEpisodes` is 0 AND `stats.xBuilders` is 0, tell the user:
+If `stats.podcastEpisodes`, `stats.xBuilders`, AND `stats.blogPosts` are all 0,
+tell the user:
 "No new updates from your builders today. Check back tomorrow!" Then stop.
 
 ### Step 4: Remix content
@@ -346,6 +364,7 @@ Read the prompts from the `prompts` field in the JSON:
 - `prompts.digest_intro` — overall framing rules
 - `prompts.summarize_podcast` — how to remix podcast transcripts
 - `prompts.summarize_tweets` — how to remix tweets
+- `prompts.summarize_blogs` — how to remix official blog posts
 - `prompts.translate` — how to translate to Chinese
 
 **Tweets (process first):** The `x` array has builders with tweets. Process one at a time:
@@ -353,7 +372,11 @@ Read the prompts from the `prompts` field in the JSON:
 2. Summarize their `tweets` using `prompts.summarize_tweets`
 3. Every tweet MUST include its `url` from the JSON
 
-**Podcast (process second):** The `podcasts` array has at most 1 episode. If present:
+**Official blogs (process second):** Process each item in `blogs` using
+`prompts.summarize_blogs`. Use the exact `name`, `title`, `author`, and `url`
+fields from the JSON. Every included post must retain its original URL.
+
+**Podcast (process third):** The `podcasts` array has at most 1 episode. If present:
 1. Summarize its `transcript` using `prompts.summarize_podcast`
 2. Use `name`, `title`, and `url` from the JSON object — NOT from the transcript
 
@@ -397,7 +420,7 @@ Read `config.language` from the JSON:
 
 Read `config.delivery.method` from the JSON:
 
-**If "telegram" or "email":**
+**If "telegram", "email", or "lark":**
 ```bash
 echo '<your digest text>' > /tmp/fb-digest.txt
 cd ${CLAUDE_SKILL_DIR}/scripts && node deliver.js --file /tmp/fb-digest.txt 2>/dev/null
@@ -428,7 +451,7 @@ open an issue at https://github.com/zarazhangrui/follow-builders."
 - "Switch to Chinese/English/bilingual" → Update `language` in config.json
 
 ### Delivery Changes
-- "Switch to Telegram/email" → Update `delivery.method` in config.json, guide user through setup if needed
+- "Switch to Telegram/email/Lark" → Update `delivery.method` in config.json, guide user through setup if needed
 - "Change my email" → Update `delivery.email` in config.json
 - "Send to this chat instead" → Set `delivery.method` to "stdout"
 

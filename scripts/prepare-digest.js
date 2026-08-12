@@ -25,6 +25,8 @@ import { homedir } from 'os';
 
 const USER_DIR = join(homedir(), '.follow-builders');
 const CONFIG_PATH = join(USER_DIR, 'config.json');
+const SCRIPT_DIR = decodeURIComponent(new URL('.', import.meta.url).pathname);
+const REPO_DIR = join(SCRIPT_DIR, '..');
 
 const FEED_X_URL = 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-x.json';
 const FEED_PODCASTS_URL = 'https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-podcasts.json';
@@ -53,6 +55,13 @@ async function fetchText(url) {
   return res.text();
 }
 
+async function loadFeed(filename, url) {
+  if (process.env.FOLLOW_BUILDERS_FEED_SOURCE === 'local') {
+    return JSON.parse(await readFile(join(REPO_DIR, filename), 'utf8'));
+  }
+  return fetchJSON(url);
+}
+
 // -- Main --------------------------------------------------------------------
 
 async function main() {
@@ -74,9 +83,9 @@ async function main() {
 
   // 2. Fetch all three feeds
   const [feedX, feedPodcasts, feedBlogs] = await Promise.all([
-    fetchJSON(FEED_X_URL),
-    fetchJSON(FEED_PODCASTS_URL),
-    fetchJSON(FEED_BLOGS_URL)
+    loadFeed('feed-x.json', FEED_X_URL),
+    loadFeed('feed-podcasts.json', FEED_PODCASTS_URL),
+    loadFeed('feed-blogs.json', FEED_BLOGS_URL)
   ]);
 
   if (!feedX) errors.push('Could not fetch tweet feed');
@@ -105,8 +114,7 @@ async function main() {
   // Otherwise, fetch the latest from GitHub so they get central improvements.
   // If GitHub is unreachable, fall back to the local copy shipped with the skill.
   const prompts = {};
-  const scriptDir = decodeURIComponent(new URL('.', import.meta.url).pathname);
-  const localPromptsDir = join(scriptDir, '..', 'prompts');
+  const localPromptsDir = join(REPO_DIR, 'prompts');
   const userPromptsDir = join(USER_DIR, 'prompts');
 
   for (const filename of PROMPT_FILES) {
@@ -120,11 +128,14 @@ async function main() {
       continue;
     }
 
-    // Priority 2: latest from GitHub (central updates)
-    const remote = await fetchText(`${PROMPTS_BASE}/${filename}`);
-    if (remote) {
-      prompts[key] = remote;
-      continue;
+    // Priority 2: latest from GitHub (central updates). Repository workflows
+    // can pin prompts to the checked-out commit for a reproducible run.
+    if (process.env.FOLLOW_BUILDERS_PROMPT_SOURCE !== 'local') {
+      const remote = await fetchText(`${PROMPTS_BASE}/${filename}`);
+      if (remote) {
+        prompts[key] = remote;
+        continue;
+      }
     }
 
     // Priority 3: local copy shipped with the skill
