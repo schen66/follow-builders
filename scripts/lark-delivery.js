@@ -128,8 +128,11 @@ export async function sendLarkDigest(
 ) {
   const appId = env.LARK_APP_ID;
   const appSecret = env.LARK_APP_SECRET;
-  if (!appId) throw new Error('LARK_APP_ID is not set');
-  if (!appSecret) throw new Error('LARK_APP_SECRET is not set');
+  if (Boolean(appId) !== Boolean(appSecret)) {
+    throw new Error(
+      'Set both LARK_APP_ID and LARK_APP_SECRET, or neither when using a configured lark-cli profile'
+    );
+  }
 
   const target = resolveLarkTarget(delivery, env);
   const chunks = splitLarkMarkdown(text);
@@ -149,16 +152,20 @@ export async function sendLarkDigest(
       dryRun
     });
 
+    const cliEnv = {
+      ...env,
+      LARKSUITE_CLI_BRAND: env.LARK_BRAND || 'feishu',
+      LARKSUITE_CLI_NO_UPDATE_NOTIFIER: '1',
+      LARKSUITE_CLI_NO_SKILLS_NOTIFIER: '1'
+    };
+    if (appId && appSecret) {
+      cliEnv.LARKSUITE_CLI_APP_ID = appId;
+      cliEnv.LARKSUITE_CLI_APP_SECRET = appSecret;
+    }
+
     const result = spawnSync(cli, args, {
       stdio: 'inherit',
-      env: {
-        ...env,
-        LARKSUITE_CLI_APP_ID: appId,
-        LARKSUITE_CLI_APP_SECRET: appSecret,
-        LARKSUITE_CLI_BRAND: env.LARK_BRAND || 'feishu',
-        LARKSUITE_CLI_NO_UPDATE_NOTIFIER: '1',
-        LARKSUITE_CLI_NO_SKILLS_NOTIFIER: '1'
-      }
+      env: cliEnv
     });
 
     if (result.error) throw result.error;

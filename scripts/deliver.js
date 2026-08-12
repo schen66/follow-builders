@@ -11,8 +11,9 @@
 //   node deliver.js --message "digest text"
 //   node deliver.js --file /path/to/digest.txt
 //
-// The script reads delivery config from ~/.follow-builders/config.json
-// and API keys from ~/.follow-builders/.env
+// The script reads delivery config from ~/.follow-builders/config.json (or
+// FOLLOW_BUILDERS_CONFIG_PATH) and API keys from ~/.follow-builders/.env.
+// Lark can alternatively use the official CLI's configured local profile.
 //
 // Delivery methods:
 //   - "telegram": sends via Telegram Bot API (needs TELEGRAM_BOT_TOKEN + chat ID)
@@ -157,9 +158,10 @@ async function main() {
   // Load env and config
   loadEnv({ path: ENV_PATH });
 
+  const configPath = process.env.FOLLOW_BUILDERS_CONFIG_PATH || CONFIG_PATH;
   let config = {};
-  if (existsSync(CONFIG_PATH)) {
-    config = JSON.parse(await readFile(CONFIG_PATH, 'utf-8'));
+  if (existsSync(configPath)) {
+    config = JSON.parse(await readFile(configPath, 'utf-8'));
   }
 
   const delivery = config.delivery || { method: 'stdout' };

@@ -68,9 +68,36 @@ Set exactly one of these targets:
   the `im.message.receive_v1` event in the developer console. Open IDs are scoped
   to an app, so use the value emitted for this same app.
 
-### 3. Store delivery credentials locally
+### 3. Store delivery configuration locally
 
-Create `~/.follow-builders/.env` with these values (never commit this file):
+Prefer the official CLI's local profile so the App Secret never enters the
+repository or a scheduled-task prompt:
+
+```bash
+lark-cli config init --app-id cli_xxx --app-secret-stdin --brand feishu
+```
+
+The secret is read from stdin, so it does not appear in shell history. If the
+restricted Codex runtime cannot read the macOS Keychain, run
+`lark-cli config keychain-downgrade` only after accepting the local-file
+permission trade-off; the CLI then stores its profile for the current macOS user.
+
+Store only the non-secret recipient in the Git-ignored
+`.follow-builders-local/config.json`:
+
+```json
+{
+  "delivery": {
+    "method": "lark",
+    "openId": "ou_xxx"
+  }
+}
+```
+
+For a group use `"chatId": "oc_xxx"` instead; set exactly one. Use
+`LARK_BRAND=lark` locally for Lark international. No `OPENAI_API_KEY` is needed.
+
+The legacy `~/.follow-builders/.env` method is also supported (never commit it):
 
 ```dotenv
 LARK_APP_ID=cli_xxx
@@ -80,8 +107,6 @@ LARK_CHAT_ID=oc_xxx
 # LARK_OPEN_ID=ou_xxx
 LARK_BRAND=feishu
 ```
-
-Use `LARK_BRAND=lark` for Lark international. No `OPENAI_API_KEY` is needed.
 
 ### 4. Install and schedule
 
@@ -191,7 +216,8 @@ See [examples/sample-digest.md](examples/sample-digest.md) for what the output l
 ## Privacy
 
 - No API keys are sent anywhere — all content is fetched centrally
-- If you use Telegram/email/Lark delivery, those keys are stored locally in `~/.follow-builders/.env`
+- Telegram/email keys stay in `~/.follow-builders/.env`; Lark credentials stay
+  in the official CLI's local profile (or the legacy `.env` fallback)
 - The skill only reads public content (public blog posts, public YouTube videos, public X posts)
 - Your configuration, preferences, and reading history stay on your machine
 

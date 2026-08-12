@@ -116,9 +116,10 @@ Add the key to the .env file.
 
 **If they choose Lark/Feishu:**
 For local Codex delivery, follow the "Scheduled Lark/Feishu delivery with Codex"
-section in README.md or README.zh-CN.md. Keep app credentials and the recipient
-ID only in `~/.follow-builders/.env`. Never commit them. Keep the computer awake
-and the ChatGPT/Codex desktop app running at delivery time.
+section in README.md or README.zh-CN.md. Prefer the official `lark-cli` local
+profile for the App Secret and keep only the non-secret recipient ID in the
+Git-ignored `.follow-builders-local/config.json`. Never commit credentials. Keep
+the computer awake and the ChatGPT/Codex desktop app running at delivery time.
 
 **If they choose on-demand:**
 Set `delivery.method` to `"stdout"`. Tell them: "No problem — just type /ai
@@ -136,7 +137,7 @@ Ask: "What language do you prefer for your digest?"
 **If the user chose "stdout" or "right here" delivery:** No API keys needed at all!
 All content is fetched centrally. Skip to Step 6.
 
-**If the user chose Telegram, Email, or local Lark delivery:**
+**If the user chose Telegram or Email delivery:**
 Create the .env file with only the delivery key they need:
 
 ```bash
@@ -148,20 +149,20 @@ cat > ~/.follow-builders/.env << 'ENVEOF'
 # Resend API key (only if using email delivery)
 # RESEND_API_KEY=paste_your_key_here
 
-# Lark/Feishu app credentials (only if using local Lark delivery)
-# LARK_APP_ID=cli_xxx
-# LARK_APP_SECRET=paste_your_app_secret_here
-# Set exactly one recipient:
-# LARK_CHAT_ID=oc_xxx
-# LARK_OPEN_ID=ou_xxx
 ENVEOF
 ```
 
 Uncomment only the line they need. Open the file for them to paste the key.
 
+For local Lark delivery, initialize the official CLI with
+`lark-cli config init --app-id cli_xxx --app-secret-stdin --brand feishu` and
+store exactly one non-secret `delivery.chatId` or `delivery.openId` in
+`.follow-builders-local/config.json` as documented in README.md. Never put the
+App Secret in a prompt or committed file.
+
 Tell the user: "All podcast and X/Twitter content is fetched for you automatically
-from a central feed — no API keys needed for that. You only need a key for
-[Telegram/email/Lark] delivery."
+from a central feed — no API keys needed for that. Telegram/email use a local
+delivery key; Lark uses the official CLI's local app profile."
 
 ### Step 6: Show Sources
 

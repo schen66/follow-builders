@@ -42,6 +42,7 @@ async function main() {
       env: {
         ...process.env,
         DELIVERY_METHOD: 'lark',
+        FOLLOW_BUILDERS_CONFIG_PATH: join(localDir, 'config.json'),
         LARK_DRY_RUN: dryRun ? '1' : '0'
       }
     }

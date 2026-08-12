@@ -61,9 +61,33 @@ Agent 会询问你：
   `event.sender.sender_id.open_id` 复制。`open_id` 与应用绑定，必须使用这个应用
   收到的值。
 
-### 3. 在本机保存投递凭据
+### 3. 在本机保存投递配置
 
-创建 `~/.follow-builders/.env`，写入以下内容（绝不要提交该文件）：
+推荐让官方 CLI 管理 App Secret，避免把密钥写入仓库或任务 prompt：
+
+```bash
+lark-cli config init --app-id cli_xxx --app-secret-stdin --brand feishu
+```
+
+App Secret 从标准输入读取，不会出现在命令行历史中。若 Codex 的受限运行环境无法读取
+macOS 钥匙串，可在确认本机文件权限风险后运行 `lark-cli config keychain-downgrade`；
+CLI 会用仅限当前 macOS 用户的本地配置替代钥匙串。
+
+然后在被 Git 忽略的 `.follow-builders-local/config.json` 中只保存非敏感接收目标：
+
+```json
+{
+  "delivery": {
+    "method": "lark",
+    "openId": "ou_xxx"
+  }
+}
+```
+
+群聊改用 `"chatId": "oc_xxx"`，二者只能设置一个。国际版 Lark 在本机设置
+`LARK_BRAND=lark`。不需要 `OPENAI_API_KEY`。
+
+也兼容旧的 `~/.follow-builders/.env` 方式（绝不要提交该文件）：
 
 ```dotenv
 LARK_APP_ID=cli_xxx
@@ -73,8 +97,6 @@ LARK_CHAT_ID=oc_xxx
 # LARK_OPEN_ID=ou_xxx
 LARK_BRAND=feishu
 ```
-
-国际版 Lark 使用 `LARK_BRAND=lark`。不需要 `OPENAI_API_KEY`。
 
 ### 4. 安装并创建定时任务
 
@@ -177,7 +199,8 @@ cd ~/.claude/skills/follow-builders/scripts && npm install
 ## 隐私
 
 - 不发送任何 API key——所有内容由中心化服务获取
-- 如果你使用 Telegram/邮件/飞书推送，相关 key 仅存储在本地 `~/.follow-builders/.env`
+- Telegram/邮件 key 保存在本地 `~/.follow-builders/.env`；飞书凭据优先保存在
+  官方 CLI 的本机配置中（也兼容旧的 `.env` 方式）
 - Skill 只读取公开内容（公开的博客文章、YouTube 视频和 X 帖子）
 - 你的配置、偏好和阅读记录都保留在你自己的设备上
 
