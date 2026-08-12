@@ -30,6 +30,98 @@ Agent 会询问你：
 不需要任何 API key——所有内容由中心化服务统一抓取。
 设置完成后，你的第一期摘要会立即推送。
 
+## 使用 Codex 定时推送到飞书/Lark
+
+本地 Codex Scheduled task 会在每天 **Asia/Shanghai 08:00** 生成并发送完整
+中文日报。Codex 使用用户的 ChatGPT/Codex 订阅额度完成内容整理，再由官方
+`lark-cli` 投递；不使用 OpenAI API key，也不使用 GitHub Actions 执行日报。
+现有中央 feed 和其他 ChatGPT/Agent 消费流程保持不变。
+
+这是本地自动任务：发送时间需要电脑保持唤醒，ChatGPT/Codex 桌面应用保持运行。
+任务读取最新公共中央 feed，投递状态只保存在本机，不会提交凭据或接收目标。
+
+### 1. 创建并配置飞书/Lark 应用
+
+1. 在飞书/Lark 开放平台创建企业自建应用，并启用机器人能力。
+2. 为机器人开通 `im:message:send_as_bot` 权限，发布应用版本，并确保目标用户在
+   应用可用范围内。
+3. 如果发到群聊，把机器人加入目标群并确认机器人可以发言。
+4. 在应用凭证页面复制 App ID（`cli_xxx`）和 App Secret。
+
+### 2. 获取接收目标 ID
+
+以下目标二选一：
+
+- **群聊：** 使用以 `oc_` 开头的 `chat_id`。机器人加入群后，可运行
+  `lark-cli im +chat-search --query "<群名>" --as bot --format json`；也可以在群内
+  发送一条会触发 `im.message.receive_v1` 的消息，然后从事件里的
+  `event.message.chat_id` 复制。
+- **私聊：** 使用以 `ou_` 开头、属于当前应用的用户 `open_id`。让用户先给机器人
+  发一条消息，再从开放平台 `im.message.receive_v1` 事件中的
+  `event.sender.sender_id.open_id` 复制。`open_id` 与应用绑定，必须使用这个应用
+  收到的值。
+
+### 3. 在本机保存投递配置
+
+推荐让官方 CLI 管理 App Secret，避免把密钥写入仓库或任务 prompt：
+
+```bash
+lark-cli config init --app-id cli_xxx --app-secret-stdin --brand feishu
+```
+
+App Secret 从标准输入读取，不会出现在命令行历史中。若 Codex 的受限运行环境无法读取
+macOS 钥匙串，可在确认本机文件权限风险后运行 `lark-cli config keychain-downgrade`；
+CLI 会用仅限当前 macOS 用户的本地配置替代钥匙串。
+
+然后在被 Git 忽略的 `.follow-builders-local/config.json` 中只保存非敏感接收目标：
+
+```json
+{
+  "delivery": {
+    "method": "lark",
+    "openId": "ou_xxx"
+  }
+}
+```
+
+群聊改用 `"chatId": "oc_xxx"`，二者只能设置一个。国际版 Lark 在本机设置
+`LARK_BRAND=lark`。不需要 `OPENAI_API_KEY`。
+
+也兼容旧的 `~/.follow-builders/.env` 方式（绝不要提交该文件）：
+
+```dotenv
+LARK_APP_ID=cli_xxx
+LARK_APP_SECRET=your_app_secret
+# 接收目标二选一：
+LARK_CHAT_ID=oc_xxx
+# LARK_OPEN_ID=ou_xxx
+LARK_BRAND=feishu
+```
+
+### 4. 安装并创建定时任务
+
+安装锁定版本的官方 CLI，并验证确定性脚本：
+
+```bash
+cd scripts
+npm ci
+npm test
+```
+
+在本仓库创建每天 Asia/Shanghai 08:00 的 Codex Scheduled task。每次运行先执行
+`prepare-local-lark-run.js`，读取 `prompts/codex-lark-digest.md` 和生成的
+`lark-input.json`，写入完整日报，再执行 `finalize-local-lark-run.js`。
+
+如果本地命令沙箱无法直接连接 GitHub，让 Codex 定时任务使用已连接 GitHub 应用的
+只读 `fetch_file` 操作刷新 `.follow-builders-local/central-feed-bundle.json`，再用
+`--use-cache` 重跑准备步骤。此回退只读取
+`zarazhangrui/follow-builders@main` 的 8 个公开 feed/prompt 文件，绝不向该仓库写入。
+
+`.follow-builders-local/state-lark.json` 已被 Git 忽略，并与中央 feed 状态分离。
+新条目在生成前进入队列，只有发送成功才会清除，因此不会正常重复，也不会因失败
+漏发。finalizer 会拒绝遗漏任一原始链接的日报。队列为空时，Codex 发送完全一致的
+“今天暂无新的 Builder 更新”。
+
 ## 修改设置
 
 通过对话即可修改推送偏好。直接告诉你的 agent：
@@ -112,7 +204,8 @@ cd ~/.claude/skills/follow-builders/scripts && npm install
 ## 隐私
 
 - 不发送任何 API key——所有内容由中心化服务获取
-- 如果你使用 Telegram/邮件推送，相关 key 仅存储在本地 `~/.follow-builders/.env`
+- Telegram/邮件 key 保存在本地 `~/.follow-builders/.env`；飞书凭据优先保存在
+  官方 CLI 的本机配置中（也兼容旧的 `.env` 方式）
 - Skill 只读取公开内容（公开的博客文章、YouTube 视频和 X 帖子）
 - 你的配置、偏好和阅读记录都保留在你自己的设备上
 

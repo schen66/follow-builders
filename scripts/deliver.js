@@ -4,19 +4,21 @@
 // Follow Builders — Delivery Script
 // ============================================================================
 // Sends a digest to the user via their chosen delivery method.
-// Supports: Telegram bot, Email (via Resend), or stdout (default).
+// Supports: Telegram bot, Email (via Resend), Lark/Feishu, or stdout (default).
 //
 // Usage:
 //   echo "digest text" | node deliver.js
 //   node deliver.js --message "digest text"
 //   node deliver.js --file /path/to/digest.txt
 //
-// The script reads delivery config from ~/.follow-builders/config.json
-// and API keys from ~/.follow-builders/.env
+// The script reads delivery config from ~/.follow-builders/config.json (or
+// FOLLOW_BUILDERS_CONFIG_PATH) and API keys from ~/.follow-builders/.env.
+// Lark can alternatively use the official CLI's configured local profile.
 //
 // Delivery methods:
 //   - "telegram": sends via Telegram Bot API (needs TELEGRAM_BOT_TOKEN + chat ID)
 //   - "email": sends via Resend API (needs RESEND_API_KEY + email address)
+//   - "lark": sends via lark-cli (needs app credentials + chat_id/open_id)
 //   - "stdout" (default): just prints to terminal
 // ============================================================================
 
@@ -25,6 +27,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { config as loadEnv } from 'dotenv';
+import { sendLarkDigest } from './lark-delivery.js';
 
 // -- Constants ---------------------------------------------------------------
 
@@ -155,12 +158,16 @@ async function main() {
   // Load env and config
   loadEnv({ path: ENV_PATH });
 
+  const configPath = process.env.FOLLOW_BUILDERS_CONFIG_PATH || CONFIG_PATH;
   let config = {};
-  if (existsSync(CONFIG_PATH)) {
-    config = JSON.parse(await readFile(CONFIG_PATH, 'utf-8'));
+  if (existsSync(configPath)) {
+    config = JSON.parse(await readFile(configPath, 'utf-8'));
   }
 
   const delivery = config.delivery || { method: 'stdout' };
+  if (process.env.DELIVERY_METHOD) {
+    delivery.method = process.env.DELIVERY_METHOD;
+  }
   const digestText = await getDigestText();
 
   if (!digestText || digestText.trim().length === 0) {
@@ -194,6 +201,20 @@ async function main() {
           status: 'ok',
           method: 'email',
           message: `Digest sent to ${toEmail}`
+        }));
+        break;
+      }
+
+      case 'lark': {
+        const result = await sendLarkDigest(digestText, delivery, {
+          dryRun: process.env.LARK_DRY_RUN === '1'
+        });
+        console.log(JSON.stringify({
+          status: 'ok',
+          method: 'lark',
+          message: result.dryRun
+            ? `Validated ${result.messageCount} Lark message(s)`
+            : `Digest sent to Lark in ${result.messageCount} message(s)`
         }));
         break;
       }

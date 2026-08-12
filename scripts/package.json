@@ -5,9 +5,13 @@
   "type": "module",
   "scripts": {
     "generate-feed": "node generate-feed.js",
-    "prepare-digest": "node prepare-digest.js"
+    "prepare-digest": "node prepare-digest.js",
+    "prepare-lark-local": "node prepare-local-lark-run.js",
+    "finalize-lark-local": "node finalize-local-lark-run.js",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "@larksuite/cli": "1.0.86",
     "dotenv": "^16.4.0",
     "proper-lockfile": "^4.1.0"
   }

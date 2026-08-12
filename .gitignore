@@ -1,4 +1,5 @@
 scripts/node_modules/
+.follow-builders-local/
 .env
 *.log
 .DS_Store
